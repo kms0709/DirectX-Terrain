@@ -4,7 +4,6 @@
 #include "Components/RotatorComponent.h"
 #include "Components/TransformComponent.h"
 #include "Graphics/D3D11Renderer.h"
-#include "Graphics/SceneRenderer.h"
 #include "Scene/GameObject.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
@@ -12,7 +11,10 @@
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
+#include <ImGuizmo.h>
 
+#include <DirectXMath.h>
+#include <cmath>
 #include <string>
 
 // imgui_impl_win32.h intentionally does not expose this declaration to avoid
@@ -51,6 +53,7 @@ namespace Framework
         }
 
         m_initialized = true;
+        m_camera.Initialize(window);
         return true;
     }
 
@@ -59,13 +62,18 @@ namespace Framework
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+        ImGuizmo::BeginFrame();
     }
 
-    void EditorLayer::Draw(SceneManager& sceneManager, const SceneRenderer& sceneRenderer,
-        const D3D11Renderer& renderer, float deltaTime)
+    void EditorLayer::UpdateCamera(float deltaTime)
+    {
+        m_camera.Update(deltaTime);
+    }
+
+    void EditorLayer::Draw(SceneManager& sceneManager, const D3D11Renderer& renderer, float deltaTime)
     {
         ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(360.0f, 150.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(390.0f, 190.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Framework Editor");
         ImGui::Text("Direct3D 11 / Dear ImGui %s", IMGUI_VERSION);
         ImGui::Text("Frame: %.3f ms (%.1f FPS)", deltaTime * 1000.0f,
@@ -74,11 +82,20 @@ namespace Framework
         ImGui::Checkbox("VSync", &m_vsync);
         ImGui::SameLine();
         ImGui::Checkbox("ImGui demo", &m_showDemoWindow);
+        const auto& cameraPosition = m_camera.GetPosition();
+        ImGui::Text("Camera: %.1f, %.1f, %.1f", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset"))
+            m_camera.Reset();
+        ImGui::TextDisabled("Viewport: RMB + WASD / drag, Wheel: dolly");
+        const char* gizmoMode = m_gizmoOperation == GizmoOperation::Translate ? "Move (W)" :
+            m_gizmoOperation == GizmoOperation::Rotate ? "Rotate (E)" : "Scale (R)";
+        ImGui::Text("Gizmo: %s", gizmoMode);
         ImGui::End();
 
         const auto& scenes = sceneManager.GetScenes();
         int activeSceneIndex = static_cast<int>(sceneManager.GetActiveSceneIndex());
-        ImGui::SetNextWindowPos(ImVec2(12.0f, 172.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(12.0f, 212.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(300.0f, 500.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Hierarchy");
         const char* activeSceneName = sceneManager.GetActiveScene() ? sceneManager.GetActiveScene()->GetName().c_str() : "None";
@@ -107,7 +124,7 @@ namespace Framework
         ImGui::End();
 
         DrawInspector();
-        DrawGizmo(sceneRenderer, renderer);
+        DrawGizmo(renderer);
 
         if (m_showDemoWindow)
         {
@@ -212,30 +229,66 @@ namespace Framework
         ImGui::End();
     }
 
-    void EditorLayer::DrawGizmo(const SceneRenderer& sceneRenderer, const D3D11Renderer& renderer)
+    void EditorLayer::DrawGizmo(const D3D11Renderer& renderer)
     {
         if (m_selectedObject == nullptr || !m_selectedObject->IsActive())
             return;
 
-        float x = 0.0f;
-        float y = 0.0f;
-        if (!sceneRenderer.ProjectToScreen(m_selectedObject->GetTransform().position, renderer, x, y))
+        ImGuiIO& io = ImGui::GetIO();
+        if (!m_camera.IsNavigating() && !io.WantTextInput)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_W, false))
+                m_gizmoOperation = GizmoOperation::Translate;
+            else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
+                m_gizmoOperation = GizmoOperation::Rotate;
+            else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+                m_gizmoOperation = GizmoOperation::Scale;
+        }
+
+        if (renderer.GetWidth() == 0 || renderer.GetHeight() == 0)
             return;
 
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        const ImVec2 origin(x, y);
-        constexpr float axisLength = 48.0f;
-        drawList->AddCircleFilled(origin, 4.0f, IM_COL32(255, 255, 255, 230));
-        drawList->AddLine(origin, ImVec2(x + axisLength, y), IM_COL32(235, 70, 70, 255), 3.0f);
-        drawList->AddTriangleFilled(ImVec2(x + axisLength + 7, y), ImVec2(x + axisLength - 2, y - 5),
-            ImVec2(x + axisLength - 2, y + 5), IM_COL32(235, 70, 70, 255));
-        drawList->AddText(ImVec2(x + axisLength + 8, y - 8), IM_COL32(255, 100, 100, 255), "X");
-        drawList->AddLine(origin, ImVec2(x, y - axisLength), IM_COL32(80, 220, 100, 255), 3.0f);
-        drawList->AddTriangleFilled(ImVec2(x, y - axisLength - 7), ImVec2(x - 5, y - axisLength + 2),
-            ImVec2(x + 5, y - axisLength + 2), IM_COL32(80, 220, 100, 255));
-        drawList->AddText(ImVec2(x + 5, y - axisLength - 14), IM_COL32(100, 255, 120, 255), "Y");
-        drawList->AddLine(origin, ImVec2(x - 32.0f, y + 32.0f), IM_COL32(70, 130, 245, 255), 3.0f);
-        drawList->AddText(ImVec2(x - 45.0f, y + 30.0f), IM_COL32(100, 150, 255, 255), "Z");
+        using namespace DirectX;
+        const float aspectRatio = static_cast<float>(renderer.GetWidth()) / renderer.GetHeight();
+        XMFLOAT4X4 view{};
+        XMFLOAT4X4 projection{};
+        XMStoreFloat4x4(&view, m_camera.GetViewMatrix());
+        XMStoreFloat4x4(&projection, m_camera.GetProjectionMatrix(aspectRatio));
+
+        TransformComponent& transform = m_selectedObject->GetTransform();
+        XMFLOAT4X4 world{};
+        const XMMATRIX worldMatrix =
+            XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
+            XMMatrixRotationX(XMConvertToRadians(transform.rotation.x)) *
+            XMMatrixRotationY(XMConvertToRadians(transform.rotation.y)) *
+            XMMatrixRotationZ(XMConvertToRadians(transform.rotation.z)) *
+            XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
+        XMStoreFloat4x4(&world, worldMatrix);
+
+        ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
+        if (m_gizmoOperation == GizmoOperation::Rotate)
+            operation = ImGuizmo::ROTATE;
+        else if (m_gizmoOperation == GizmoOperation::Scale)
+            operation = ImGuizmo::SCALE;
+
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::SetRect(0.0f, 0.0f,
+            static_cast<float>(renderer.GetWidth()), static_cast<float>(renderer.GetHeight()));
+        ImGuizmo::Enable(!io.WantCaptureMouse || ImGuizmo::IsUsing());
+
+        if (ImGuizmo::Manipulate(&view._11, &projection._11, operation,
+            ImGuizmo::LOCAL, &world._11))
+        {
+            float position[3]{};
+            float rotation[3]{};
+            float scale[3]{};
+            ImGuizmo::DecomposeMatrixToComponents(&world._11, position, rotation, scale);
+
+            transform.position = { position[0], position[1], position[2] };
+            transform.rotation = { rotation[0], rotation[1], rotation[2] };
+            if (std::abs(scale[0]) > 0.0001f && std::abs(scale[1]) > 0.0001f && std::abs(scale[2]) > 0.0001f)
+                transform.scale = { scale[0], scale[1], scale[2] };
+        }
     }
 
     void EditorLayer::Render()

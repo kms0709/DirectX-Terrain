@@ -18,7 +18,8 @@ namespace Framework
     {
     public:
         void Initialize(D3D11Renderer& renderer);
-        void Render(const Scene& scene, const D3D11Renderer& renderer);
+        void Render(const Scene& scene, const D3D11Renderer& renderer,
+            DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection);
         [[nodiscard]] bool ProjectToScreen(
             const Vector3& worldPosition,
             const D3D11Renderer& renderer,

@@ -1,4 +1,4 @@
-# DirectX-Terrain
+DirectX-Terrain
 
 ## 학습 과정
 
@@ -67,3 +67,39 @@ main -> Application -> Scene 으로 넘어감.
   - Model 은 Box, Sphere, Cylinder, Plane 가 있다.
   - Inspector 에서 Mesh Component Model 을 선택할 수 있다.
 ```
+
+## 과정 2. 에디터에서 화면을 둘러볼 수 있는 카메라 추가 ( 컴포넌트 아님 )
+
+```
+Editor 에서 화면을 둘러볼 수 있는 카메라를 추가해 줘.
+- GameObject 에 붙이는 Component 가 아니다.
+- UI 창 밖에서 마우스 우클릭을 한 상태에서 다음과 같은 동작이 되야 한다.
+  - W, A, S, D 로 이동
+  - 드래그 시 시점 변환
+- UI 창 밖에서 마우스 휠로 확대, 축소가 되어야 한다.
+```
+
+## 문제점 2. Gizmo 가 카메라 방향에 상관없이 고정되는 문제
+
+GameObject 선택 시, Gizmo 가 GameObject 의 Z축을 기준으로 카메라의 방향에 맞춰 보여야 하는데
+카메라의 시점이 바뀌어도 항상 일정한 문제.
+
+## 프롬프트 수정안 2. Gizmo 축 수정 및 기능 추가
+
+Camera 에 따른 Gizmo 를 올바르게 보이게 하고,
+유니티와 비슷하게 기능을 추가했다.
+
+```
+GameObject 선택 시 나오는 Gizmo 를 다음과 같이 수정해 줘.
+- GameObject 의 Z축을 기준으로 Camera 의 위치에 맞게 Gizmo 가 보여져야 한다.
+- GameObject 를 선택하고 Gizmo 가 보이는 상태에서 W를 누르면 이동, E 를 누르면 회전, R 을 누르면 크기 Gizmo 가 보여야 한다.
+- Gizmo 를 잡고 드래그 시 잡은 축을 기준으로 이동, 회전, 크기 변환이 되어야 한다.
+```
+
+## 문제점 2-1. Gizmo 선택 시 Gizmo 가 깜빡거리는 문제
+
+공사 중
+
+## 과정 3. Terrain Component 추가
+
+공사 중

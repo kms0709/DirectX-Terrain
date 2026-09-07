@@ -21,6 +21,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+set(IMGUIZMO_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    imguizmo_source
+    GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+    GIT_TAG 1.10
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(imguizmo_source)
+
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -37,6 +46,8 @@ target_include_directories(imgui PUBLIC
 )
 
 target_compile_definitions(imgui PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(imguizmo PUBLIC imgui)
+target_compile_definitions(imguizmo PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 
 add_executable(D3D11Framework WIN32
     Source/main.cpp
@@ -50,6 +61,8 @@ add_executable(D3D11Framework WIN32
     Source/Graphics/SceneRenderer.h
     Source/Editor/EditorLayer.cpp
     Source/Editor/EditorLayer.h
+    Source/Editor/EditorCamera.cpp
+    Source/Editor/EditorCamera.h
     Source/Scene/Component.cpp
     Source/Scene/Component.h
     Source/Scene/GameObject.cpp
@@ -69,7 +82,7 @@ add_executable(D3D11Framework WIN32
 target_include_directories(D3D11Framework PRIVATE Source)
 target_compile_definitions(D3D11Framework PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(D3D11Framework PRIVATE /W4 /permissive- /utf-8)
-target_link_libraries(D3D11Framework PRIVATE imgui d3d11 dxgi d3dcompiler)
+target_link_libraries(D3D11Framework PRIVATE imgui imguizmo d3d11 dxgi d3dcompiler)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT D3D11Framework)
 set_target_properties(D3D11Framework PROPERTIES
@@ -83,6 +96,7 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/Source PREFIX "Source" FILES
     Source/Graphics/D3D11Renderer.cpp Source/Graphics/D3D11Renderer.h
     Source/Graphics/SceneRenderer.cpp Source/Graphics/SceneRenderer.h
     Source/Editor/EditorLayer.cpp Source/Editor/EditorLayer.h
+    Source/Editor/EditorCamera.cpp Source/Editor/EditorCamera.h
     Source/Scene/Component.cpp Source/Scene/Component.h
     Source/Scene/GameObject.cpp Source/Scene/GameObject.h
     Source/Scene/Scene.cpp Source/Scene/Scene.h

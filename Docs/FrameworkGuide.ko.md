@@ -10,6 +10,7 @@
 - C++20
 - Direct3D 11 및 DXGI
 - Dear ImGui `v1.92.9`와 공식 Win32/DX11 백엔드
+- ImGuizmo `1.10`
 - CMake 3.24 이상
 
 ## 2. 설계 구조
@@ -20,6 +21,7 @@ Application
 ├─ D3D11Renderer      Device/Context/SwapChain/RenderTarget
 ├─ SceneRenderer      Camera/Shader/Primitive Mesh 렌더링
 ├─ EditorLayer        Dear ImGui 프레임과 편집기 위젯
+│  └─ EditorCamera    Component가 아닌 편집 전용 카메라
 └─ SceneManager
    └─ Scene[]          Scene 상속 클래스로 콘텐츠 정의
       └─ GameObject[]
@@ -35,9 +37,10 @@ Application
 ```text
 Win32 메시지 처리
 → 현재 Scene::Update
-→ ImGui 새 프레임 및 Editor UI 구성
+→ ImGui 새 프레임 및 EditorCamera 입력 처리
 → D3D11 RenderTarget 지우기
 → 현재 Scene의 Mesh 렌더링
+→ Editor UI 구성
 → ImGui DrawData 렌더링
 → SwapChain Present
 → 현재 Scene::LateUpdate
@@ -133,7 +136,7 @@ Inspector의 **Add Component** 버튼으로 Mesh를 추가할 수 있습니다. 
 - `Cylinder`: 측면과 상·하단을 포함한 원기둥
 - `Plane`: XZ 평면
 
-모델과 색상을 Inspector에서 즉시 바꿀 수 있습니다. Primitive 정점/인덱스 버퍼는 `SceneRenderer` 초기화 때 한 번 생성되고 GameObject의 Transform으로 World 행렬을 구성합니다. 선택된 GameObject의 World 위치는 기본 카메라를 통해 화면 좌표로 투영되어 빨강 X, 초록 Y, 파랑 Z Gizmo로 표시됩니다.
+모델과 색상을 Inspector에서 즉시 바꿀 수 있습니다. Primitive 정점/인덱스 버퍼는 `SceneRenderer` 초기화 때 한 번 생성되고 GameObject의 Transform으로 World 행렬을 구성합니다.
 
 ## 8. 렌더링 기능 확장
 
@@ -154,9 +157,32 @@ Device나 Context를 전역 변수로 만들기보다 생성자 또는 렌더 �
 - Framework Editor: 프레임 시간, 배경색, VSync, ImGui Demo
 - Hierarchy: Scene 전환, 현재 Scene에 GameObject 추가, GameObject 선택
 - Inspector: 이름/활성 상태, Transform 편집, Mesh/Rotator Component 추가와 설정
-- Scene Overlay: 선택된 GameObject 위치에 축 Gizmo 표시
+- Scene Overlay: 선택된 GameObject의 로컬 축에 맞는 이동·회전·크기 Gizmo
 
 새 Component 타입을 Inspector에 노출하려면 `DrawInspector()`의 Add Component 팝업과 해당 Component 패널을 추가합니다. 규모가 커지면 Component별 Inspector drawer 등록 테이블로 분리하는 것이 좋습니다.
+
+### EditorCamera 조작
+
+`EditorCamera`는 GameObject에 추가하는 Component가 아니며 `EditorLayer`가 직접 소유합니다. ImGui가 입력을 사용하는 UI 창 위에서는 동작하지 않고, UI 창 밖의 장면 영역에서만 다음 입력을 처리합니다.
+
+- 마우스 오른쪽 버튼을 누른 상태의 `W`, `A`, `S`, `D`: 카메라 기준 전후좌우 이동
+- 마우스 오른쪽 버튼을 누른 상태의 드래그: Yaw/Pitch 시점 회전
+- 마우스 휠: 현재 바라보는 방향으로 전진/후진하여 확대·축소
+- `Left Shift`: 이동 속도를 3배로 증가
+
+우클릭 탐색을 시작하면 Win32 mouse capture를 설정하므로 버튼을 창 바깥에서 놓아도 정상 종료됩니다. Pitch는 카메라가 뒤집히지 않도록 제한되며, 큰 프레임 지연 시 이동량이 급증하지 않게 delta time을 제한합니다. Framework Editor의 `Reset` 버튼으로 초기 위치와 시점을 복원할 수 있습니다.
+
+### Transform Gizmo 조작
+
+Hierarchy에서 GameObject를 선택하면 ImGuizmo가 EditorCamera의 View/Projection 행렬과 GameObject의 World 행렬을 이용해 Gizmo를 그립니다. 따라서 카메라 위치가 바뀌어도 원근과 축 방향이 올바르게 유지되며, GameObject가 회전했다면 Z축을 포함한 Gizmo 축도 해당 로컬 방향을 따릅니다.
+
+- `W`: 이동(`TRANSLATE`) 모드
+- `E`: 회전(`ROTATE`) 모드
+- `R`: 크기(`SCALE`) 모드
+- 축 핸들 드래그: 한 축만 변환
+- 두 축 사이의 평면 핸들 드래그: 해당 평면 안에서 변환
+
+모든 모드는 `LOCAL` 좌표계를 사용합니다. 드래그 결과로 반환된 행렬은 Position, Rotation(도 단위), Scale로 분해하여 `TransformComponent`에 즉시 반영합니다. Inspector 값과 실제 Mesh 렌더링도 같은 프레임에 갱신됩니다. 우클릭 카메라 탐색 중에는 `W/E/R` 모드 전환을 무시하므로 `W`를 카메라 이동에 안전하게 사용할 수 있습니다.
 
 ImGui 버전은 `CMakeLists.txt`의 `GIT_TAG`에 고정되어 있습니다. 버전을 올릴 때는 공식 릴리스 태그로 변경한 뒤 Win32/DX11 백엔드도 같은 태그의 파일을 함께 빌드하고, Debug/Release 구성을 모두 확인하십시오.
 
@@ -226,4 +252,27 @@ RAII와 ComPtr를 사용해 종료 시 리소스가 안전하게 정리되게 �
 - 3D Model을 위한 Mesh Component를 추가한다.
   - Model은 Box, Sphere, Cylinder, Plane가 있다.
   - Inspector에서 Mesh Component Model을 선택할 수 있다.
+```
+
+Editor 카메라 추가에는 다음 프롬프트를 사용했습니다.
+
+```text
+Editor에서 화면을 둘러볼 수 있는 카메라를 추가해 줘.
+
+- GameObject에 붙이는 Component가 아니다.
+- UI 창 밖에서 마우스 우클릭을 한 상태에서 다음과 같은 동작이 되어야 한다.
+  - W, A, S, D로 이동
+  - 드래그 시 시점 변환
+- UI 창 밖에서 마우스 휠로 확대, 축소가 되어야 한다.
+```
+
+Transform Gizmo 확장에는 다음 프롬프트를 사용했습니다.
+
+```text
+GameObject 선택 시 나오는 Gizmo를 다음과 같이 수정해 줘.
+
+- GameObject의 Z축을 기준으로 Camera의 위치에 맞게 Gizmo가 보여져야 한다.
+- GameObject를 선택하고 Gizmo가 보이는 상태에서 W를 누르면 이동,
+  E를 누르면 회전, R을 누르면 크기 Gizmo가 보여야 한다.
+- Gizmo를 잡고 드래그 시 잡은 축을 기준으로 이동, 회전, 크기 변환이 되어야 한다.
 ```

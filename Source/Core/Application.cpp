@@ -50,11 +50,20 @@ namespace Framework
 
             m_sceneManager.Update(deltaTime);
 
-            m_renderer.BeginFrame(m_editor.GetClearColor());
-            if (const Scene* scene = m_sceneManager.GetActiveScene())
-                m_sceneRenderer.Render(*scene, m_renderer);
             m_editor.BeginFrame();
-            m_editor.Draw(m_sceneManager, m_sceneRenderer, m_renderer, deltaTime);
+            m_editor.UpdateCamera(deltaTime);
+
+            m_renderer.BeginFrame(m_editor.GetClearColor());
+            if (const Scene* scene = m_sceneManager.GetActiveScene();
+                scene != nullptr && m_renderer.GetWidth() > 0 && m_renderer.GetHeight() > 0)
+            {
+                const float aspectRatio = static_cast<float>(m_renderer.GetWidth()) /
+                    static_cast<float>(m_renderer.GetHeight());
+                m_sceneRenderer.Render(*scene, m_renderer,
+                    m_editor.GetCamera().GetViewMatrix(),
+                    m_editor.GetCamera().GetProjectionMatrix(aspectRatio));
+            }
+            m_editor.Draw(m_sceneManager, m_renderer, deltaTime);
             m_editor.Render();
             m_renderer.EndFrame(m_editor.IsVSyncEnabled());
 

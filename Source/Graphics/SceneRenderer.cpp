@@ -249,15 +249,15 @@ float4 PSMain(VSOutput input) : SV_TARGET
         CreateMeshBuffers(device, planeVertices, planeIndices, m_primitives[static_cast<std::size_t>(PrimitiveModel::Plane)]);
     }
 
-    void SceneRenderer::Render(const Scene& scene, const D3D11Renderer& renderer)
+    void SceneRenderer::Render(const Scene& scene, const D3D11Renderer& renderer,
+        DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection)
     {
         if (renderer.GetWidth() == 0 || renderer.GetHeight() == 0)
             return;
 
         using namespace DirectX;
-        m_view = XMMatrixLookAtLH(XMVectorSet(7.0f, 5.0f, -9.0f, 1.0f), XMVectorZero(), XMVectorSet(0, 1, 0, 0));
-        m_projection = XMMatrixPerspectiveFovLH(XMConvertToRadians(55.0f),
-            static_cast<float>(renderer.GetWidth()) / renderer.GetHeight(), 0.1f, 100.0f);
+        m_view = view;
+        m_projection = projection;
 
         ID3D11DeviceContext* context = renderer.GetContext();
         context->IASetInputLayout(m_inputLayout.Get());
@@ -279,8 +279,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
             const TransformComponent& transform = object->GetTransform();
             const XMMATRIX world =
                 XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
-                XMMatrixRotationRollPitchYaw(
-                    XMConvertToRadians(transform.rotation.x), XMConvertToRadians(transform.rotation.y), XMConvertToRadians(transform.rotation.z)) *
+                XMMatrixRotationX(XMConvertToRadians(transform.rotation.x)) *
+                XMMatrixRotationY(XMConvertToRadians(transform.rotation.y)) *
+                XMMatrixRotationZ(XMConvertToRadians(transform.rotation.z)) *
                 XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
             SceneConstants constants{};
             XMStoreFloat4x4(&constants.worldViewProjection, XMMatrixTranspose(world * m_view * m_projection));
