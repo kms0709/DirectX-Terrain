@@ -1,3 +1,8 @@
+# 프롬프트
+
+이 문서는 ChatGPT를 이용하여 작성했습니다.
+프롬프트 사용 및 작업 내역은 [여기](Prompt.md)를 참고하세요.
+
 # D3D11 Component Framework
 
 Visual Studio 2022와 C++20을 기준으로 만든 소형 Direct3D 11 프레임워크입니다. Win32 윈도우, Direct3D 초기화, Dear ImGui 편집기, Unity에서 착안한 Scene 및 Component 생명주기를 서로 분리했습니다.
